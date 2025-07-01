@@ -1,10 +1,7 @@
 import { Prop, Schema, SchemaFactory } from "@nestjs/mongoose";
-import { Document } from "mongoose";
+import { HydratedDocument } from "mongoose";
 import { Role } from "src/common/role.enum";
-
-export type UserDocument = User & Document
 @Schema({ timestamps: true })
-
 export class User {
     @Prop({ require: true, unique: true })
     email: string;
@@ -27,4 +24,6 @@ export class User {
     @Prop({ required: false, type: Boolean })
     isActive: boolean;
 }
-export const userSchema = SchemaFactory.createForClass(User)
+
+export type UserDocument = HydratedDocument<User>;
+export const userSchema = SchemaFactory.createForClass(User);
