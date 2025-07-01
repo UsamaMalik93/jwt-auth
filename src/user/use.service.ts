@@ -1,9 +1,10 @@
 import { BadRequestException, ConflictException, Injectable, NotFoundException } from "@nestjs/common";
-import { CreateUserDto } from "./dto/create-user.dto";
 import { InjectModel } from "@nestjs/mongoose";
 import { User, UserDocument } from "./user.model";
 import { Model } from "mongoose";
 import * as bcrypt from 'bcryptjs'
+import { RegisterDto } from "src/auth/dto/register.dto";
+import { CreateUserDto } from "./dto/create-user.dto";
 
 @Injectable()
 export class UserService {
@@ -13,7 +14,7 @@ export class UserService {
 
     ) { }
 
-    async create(userDto: CreateUserDto): Promise<User> {
+    async create(userDto: CreateUserDto): Promise<UserDocument> {
         if (!userDto.email) {
             throw new BadRequestException('Please Provide a valid email')
         }
@@ -61,9 +62,8 @@ export class UserService {
         return bcrypt.compare(refreshToken, user.refreshToken)
     }
 
-    async updateRefreshToken(userId: string, refreshToken: string | null)
-        : Promise<void> {
+    async updateRefreshToken(userId: string, refreshToken: string | null): Promise<void> {
         const hashedToken = refreshToken ? await bcrypt.hash(refreshToken, 12) : null;
-        await this.userModel.findByIdAndUpdate(userId, { refreshToken: hashedToken })
-    }
-}
+        await this.userModel.findByIdAndUpdate(userId, { refreshToken: hashedToken });
+      }
+    }      
