@@ -23,6 +23,18 @@ export class User {
 
     @Prop({ required: false, type: Boolean })
     isActive: boolean;
+
+    @Prop({ required: false, type: Number, default: 0 })
+    loginAttempts: number;
+
+    @Prop({ required: false, type: Date })
+    lockUntil: Date;
+
+    @Prop({ required: false, type: String })
+    passwordResetToken: string;
+
+    @Prop({ required: false, type: Date })
+    passwordResetExpires: Date;
 }
 
 export type UserDocument = HydratedDocument<User>;
