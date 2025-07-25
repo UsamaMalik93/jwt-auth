@@ -66,4 +66,42 @@ export class UserService {
         const hashedToken = refreshToken ? await bcrypt.hash(refreshToken, 12) : null;
         await this.userModel.findByIdAndUpdate(userId, { refreshToken: hashedToken });
       }
+
+    async incrementLoginAttempts(user: UserDocument): Promise<void> {
+        const MAX_ATTEMPTS = 5;
+        const LOCK_TIME = 15 * 60 * 1000; // 15 minutes
+        let updates: any = { $inc: { loginAttempts: 1 } };
+        // If this update causes attempts to exceed max, set lockUntil
+        if ((user.loginAttempts || 0) + 1 >= MAX_ATTEMPTS) {
+            updates.$set = { lockUntil: new Date(Date.now() + LOCK_TIME) };
+        }
+        await this.userModel.findByIdAndUpdate(user._id, updates);
+    }
+
+    async resetLoginAttempts(user: UserDocument): Promise<void> {
+        await this.userModel.findByIdAndUpdate(user._id, { loginAttempts: 0, lockUntil: null });
+    }
+
+    async setPasswordResetToken(userId: string, token: string, expires: Date): Promise<void> {
+        await this.userModel.findByIdAndUpdate(userId, {
+            passwordResetToken: token,
+            passwordResetExpires: expires,
+        });
+    }
+
+    async findByResetToken(token: string): Promise<UserDocument | null> {
+        return this.userModel.findOne({ passwordResetToken: token }).exec();
+    }
+
+    async updatePassword(userId: string, newPassword: string): Promise<void> {
+        const hashed = await bcrypt.hash(newPassword, 12);
+        await this.userModel.findByIdAndUpdate(userId, { password: hashed });
+    }
+
+    async clearPasswordResetToken(userId: string): Promise<void> {
+        await this.userModel.findByIdAndUpdate(userId, {
+            passwordResetToken: null,
+            passwordResetExpires: null,
+        });
+    }
     }      
