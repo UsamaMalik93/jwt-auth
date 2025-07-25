@@ -1,4 +1,4 @@
-import { Injectable, UnauthorizedException, ConflictException } from '@nestjs/common';
+import { Injectable, UnauthorizedException, ConflictException, BadRequestException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import * as bcrypt from 'bcryptjs';
@@ -87,11 +87,16 @@ export class AuthService {
     }
 
     async resetPassword(token: string, newPassword: string): Promise<void> {
+        // Password strength validation
+        const strong = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[!@#$%^&*()_+\-=[\]{};':"\\|,.<>/?]).{8,}$/.test(newPassword);
+        if (!strong) {
+            throw new BadRequestException('Password too weak. Must be at least 8 characters, include uppercase, lowercase, number, and special character.');
+        }
         const user = await this.userService.findByResetToken(token);
         if (!user || !user.passwordResetExpires || user.passwordResetExpires < new Date()) {
             throw new UnauthorizedException('Invalid or expired reset token');
         }
-            await this.userService.updatePassword(user._id.toString(), newPassword);
+        await this.userService.updatePassword(user._id.toString(), newPassword);
         await this.userService.clearPasswordResetToken(user._id.toString());
     }
 
