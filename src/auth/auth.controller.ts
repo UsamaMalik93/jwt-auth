@@ -7,6 +7,7 @@ import { UserDocument, User } from 'src/user/user.model';
 import { JwtPayload } from 'src/common/jwt-payload.interface';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
+import { Body, Controller, Post } from '@nestjs/common';
 
 @Injectable()
 export class AuthService {
@@ -32,7 +33,24 @@ export class AuthService {
     }
 
     async login(loginDto: LoginDto): Promise<{ user: UserDocument; tokens: any }> {
-        const user = await this.validateUser(loginDto.email, loginDto.password);
+        const user = await this.userService.findByEmail(loginDto.email);
+        if (!user) {
+            throw new UnauthorizedException('Invalid credentials');
+        }
+
+        // Check if account is locked
+        if (user.lockUntil && user.lockUntil > new Date()) {
+            throw new UnauthorizedException('Account is temporarily locked due to too many failed login attempts. Please try again later.');
+        }
+
+        const isPasswordValid = await this.userService.validatePassword(user, loginDto.password);
+        if (!isPasswordValid) {
+            await this.userService.incrementLoginAttempts(user);
+            throw new UnauthorizedException('Invalid credentials');
+        }
+
+        // Reset login attempts and lockUntil on successful login
+        await this.userService.resetLoginAttempts(user);
         const tokens = await this.generateTokens(user);
         await this.userService.updateRefreshToken(user._id.toString(), tokens.refreshToken);
 
@@ -55,6 +73,26 @@ export class AuthService {
         await this.userService.updateRefreshToken(user._id.toString(), tokens.refreshToken);
 
         return tokens;
+    }
+
+    async requestPasswordReset(email: string): Promise<void> {
+        const user = await this.userService.findByEmail(email);
+        if (!user) return; // Do not reveal if user exists
+        // Generate token
+        const token = (Math.random().toString(36).substr(2) + Date.now().toString(36));
+        const expires = new Date(Date.now() + 60 * 60 * 1000); // 1 hour
+        await this.userService.setPasswordResetToken(user._id.toString(), token, expires);
+        // Placeholder for sending email
+        console.log(`Send email to ${email} with reset link: http://your-app/reset-password?token=${token}`);
+    }
+
+    async resetPassword(token: string, newPassword: string): Promise<void> {
+        const user = await this.userService.findByResetToken(token);
+        if (!user || !user.passwordResetExpires || user.passwordResetExpires < new Date()) {
+            throw new UnauthorizedException('Invalid or expired reset token');
+        }
+            await this.userService.updatePassword(user._id.toString(), newPassword);
+        await this.userService.clearPasswordResetToken(user._id.toString());
     }
 
     private async validateUser(email: string, password: string): Promise<UserDocument> {
@@ -91,5 +129,27 @@ export class AuthService {
         ]);
 
         return { accessToken, refreshToken };
+    }
+}
+
+@Controller('auth')
+export class AuthController {
+    constructor(private readonly authService: AuthService) {}
+
+    @Post('login')
+    async login(@Body() loginDto: LoginDto) {
+        return this.authService.login(loginDto);
+    }
+
+    @Post('request-password-reset')
+    async requestPasswordReset(@Body('email') email: string) {
+        await this.authService.requestPasswordReset(email);
+        return { message: 'If that email is registered, a password reset link has been sent.' };
+    }
+
+    @Post('reset-password')
+    async resetPassword(@Body() body: { token: string; newPassword: string }) {
+        await this.authService.resetPassword(body.token, body.newPassword);
+        return { message: 'Password has been reset successfully.' };
     }
 }
