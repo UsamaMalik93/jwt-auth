@@ -35,6 +35,15 @@ export class User {
 
     @Prop({ required: false, type: Date })
     passwordResetExpires: Date;
+
+    @Prop({ required: false, type: Boolean, default: false })
+    emailVerified: boolean;
+
+    @Prop({ required: false, type: String })
+    emailVerificationToken: string;
+
+    @Prop({ required: false, type: Date })
+    emailVerificationExpires: Date;
 }
 
 export type UserDocument = HydratedDocument<User>;

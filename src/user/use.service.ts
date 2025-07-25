@@ -5,6 +5,7 @@ import { Model } from "mongoose";
 import * as bcrypt from 'bcryptjs'
 import { RegisterDto } from "src/auth/dto/register.dto";
 import { CreateUserDto } from "./dto/create-user.dto";
+import { randomBytes } from 'crypto';
 
 @Injectable()
 export class UserService {
@@ -19,14 +20,21 @@ export class UserService {
             throw new BadRequestException('Please Provide a valid email')
         }
 
-        const existingUser = this.userModel.findOne({ email: userDto.email })
+        const existingUser = await this.userModel.findOne({ email: userDto.email })
         if (existingUser) {
             throw new ConflictException("The user already exist with same email.")
         }
 
-        const newUser = new this.userModel(userDto)
+        // Generate email verification token
+        const token = randomBytes(32).toString('hex');
+        const expires = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
+        const newUser = new this.userModel({
+            ...userDto,
+            emailVerified: false,
+            emailVerificationToken: token,
+            emailVerificationExpires: expires,
+        })
         return await newUser.save()
-
     }
 
     async findByEmail(email: string): Promise<UserDocument> {
@@ -102,6 +110,25 @@ export class UserService {
         await this.userModel.findByIdAndUpdate(userId, {
             passwordResetToken: null,
             passwordResetExpires: null,
+        });
+    }
+
+    async setEmailVerificationToken(userId: string, token: string, expires: Date): Promise<void> {
+        await this.userModel.findByIdAndUpdate(userId, {
+            emailVerificationToken: token,
+            emailVerificationExpires: expires,
+        });
+    }
+
+    async findByEmailVerificationToken(token: string): Promise<UserDocument | null> {
+        return this.userModel.findOne({ emailVerificationToken: token }).exec();
+    }
+
+    async verifyEmail(userId: string): Promise<void> {
+        await this.userModel.findByIdAndUpdate(userId, {
+            emailVerified: true,
+            emailVerificationToken: null,
+            emailVerificationExpires: null,
         });
     }
     }      

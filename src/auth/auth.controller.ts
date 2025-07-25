@@ -20,6 +20,10 @@ export class AuthService {
     async register(registerDto: RegisterDto): Promise<{ user: UserDocument; tokens: any }> {
         try {
             const user = await this.userService.create(registerDto);
+            // Send email verification (placeholder)
+            if (user.emailVerificationToken) {
+                console.log(`Send verification email to ${user.email} with link: http://your-app/verify-email?token=${user.emailVerificationToken}`);
+            }
             const tokens = await this.generateTokens(user);
             await this.userService.updateRefreshToken(user._id.toString(), tokens.refreshToken);
 
@@ -36,6 +40,9 @@ export class AuthService {
         const user = await this.userService.findByEmail(loginDto.email);
         if (!user) {
             throw new UnauthorizedException('Invalid credentials');
+        }
+        if (!user.emailVerified) {
+            throw new UnauthorizedException('Please verify your email before logging in.');
         }
 
         // Check if account is locked
@@ -100,6 +107,14 @@ export class AuthService {
         await this.userService.clearPasswordResetToken(user._id.toString());
     }
 
+    async verifyEmail(token: string): Promise<void> {
+        const user = await this.userService.findByEmailVerificationToken(token);
+        if (!user || !user.emailVerificationExpires || user.emailVerificationExpires < new Date()) {
+            throw new UnauthorizedException('Invalid or expired verification token');
+        }
+        await this.userService.verifyEmail(user._id.toString());
+    }
+
     private async validateUser(email: string, password: string): Promise<UserDocument> {
         const user = await this.userService.findByEmail(email);
 
@@ -156,5 +171,11 @@ export class AuthController {
     async resetPassword(@Body() body: { token: string; newPassword: string }) {
         await this.authService.resetPassword(body.token, body.newPassword);
         return { message: 'Password has been reset successfully.' };
+    }
+
+    @Post('verify-email')
+    async verifyEmail(@Body('token') token: string) {
+        await this.authService.verifyEmail(token);
+        return { message: 'Email verified successfully.' };
     }
 }
